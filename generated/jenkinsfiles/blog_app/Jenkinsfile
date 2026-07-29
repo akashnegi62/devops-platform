@@ -207,37 +207,24 @@ pipeline {
                     )
                 ]) {
 
-                    sh """
-                    ssh -i "${SSH_KEY}" \
-                        -o StrictHostKeyChecking=no \
-                        ${SSH_USER}@${SERVER_IP} << 'EOF'
+                    sh '''
+                    set -e
 
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$SERVER_IP" '
                         set -e
-
                         if ! command -v docker >/dev/null 2>&1; then
-
                             echo "Installing Docker..."
-
                             sudo apt-get update
-
                             sudo apt-get install -y docker.io
-
                             sudo systemctl enable docker
-
                             sudo systemctl start docker
-
                             sudo usermod -aG docker ubuntu || true
-
                         else
-
                             echo "Docker already installed."
-
                         fi
-
                         sudo docker --version
-
-                    EOF
-                    """
+                    '
+                    '''
 
                 }
 
@@ -266,33 +253,22 @@ pipeline {
                 ]) {
 
                     sh """
-                    ssh -i "${SSH_KEY}" \
-                    -o StrictHostKeyChecking=no \
-                    ${SSH_USER}@${SERVER_IP} << EOF
-
                     set -e
 
-                    echo "${DOCKER_PASS}" | sudo docker login \
-                        -u "${DOCKER_USER}" \
-                        --password-stdin
-
-                    sudo docker pull ${IMAGE}
-
-                    sudo docker stop blog_app || true
-
-                    sudo docker rm blog_app || true
-
-                    sudo docker run -d \
-                        --name blog_app \
-                        --restart unless-stopped \
-                        -p 3000:3000 \
-                        ${IMAGE}
-
-                    sudo docker image prune -f
-
-                    sudo docker ps
-
-                    EOF
+                    ssh -i "\$SSH_KEY" -o StrictHostKeyChecking=no "\$SSH_USER@${SERVER_IP}" '
+                        set -e
+                        echo "\$DOCKER_PASS" | sudo docker login -u "\$DOCKER_USER" --password-stdin
+                        sudo docker pull ${IMAGE}
+                        sudo docker stop blog_app || true
+                        sudo docker rm blog_app || true
+                        sudo docker run -d \\
+                            --name blog_app \\
+                            --restart unless-stopped \\
+                            -p 3000:3000 \\
+                            ${IMAGE}
+                        sudo docker image prune -f
+                        sudo docker ps
+                    '
                     """
 
                 }
