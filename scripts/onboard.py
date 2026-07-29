@@ -51,8 +51,10 @@ jenkinsfile_template = "templates/Jenkinsfile.template"
 with open(jenkinsfile_template, "r") as f:
     pipeline = f.read()
 
+
 pipeline = (
     pipeline.replace("{{PROJECT_NAME}}", project["name"])
+            .replace("{{APP_REPO}}", github["repo"])
             .replace("{{DOCKER_IMAGE}}", docker["image"])
             .replace("{{STACK_NAME}}", aws["stackName"])
             .replace("{{REGION}}", aws["region"])
@@ -60,15 +62,24 @@ pipeline = (
             .replace("{{KEY_NAME}}", aws["keyName"])
 )
 
+
 output_dir = f"generated/jenkinsfiles/{project['name']}"
-os.makedirs(output_dir, exist_ok=True)
+
+os.makedirs(
+    output_dir,
+    exist_ok=True
+)
+
 
 jenkinsfile_output = f"{output_dir}/Jenkinsfile"
+
 
 with open(jenkinsfile_output, "w") as f:
     f.write(pipeline)
 
+
 print(f"✔ Jenkinsfile created : {jenkinsfile_output}")
+
 
 print("\n====================================")
 print(f"Project : {project['name']}")

@@ -7,6 +7,7 @@ pipeline {
         IMAGE = "deepacode/blog-app:latest"
         STACK_NAME = "blog-app-stack"
         REGION = "ap-south-1"
+        APP_REPO = "https://github.com/akashnegi62/blog-app.git"
 
     }
 
