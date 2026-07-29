@@ -1,3 +1,12 @@
+folder('Blogs') {
+
+    displayName('Blogs')
+
+    description('Automatically created project folder')
+
+}
+
+
 pipelineJob('Blogs/blog_app') {
 
 
