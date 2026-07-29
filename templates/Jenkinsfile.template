@@ -20,43 +20,38 @@ pipeline {
 
     stages {
 
-        stage('Checkout Automation Repo') {
+        stage('Checkout Automation Repository') {
             steps {
                 checkout scm
             }
         }
 
         stage('Create / Update EC2') {
-
             steps {
 
                 withAWS(credentials: 'aws-creds', region: "${REGION}") {
 
-                    sh """
+                    sh '''
+                    set -e
+
                     aws cloudformation deploy \
-                        --stack-name ${STACK_NAME} \
+                        --stack-name '"${STACK_NAME}"' \
                         --template-file cloudformation/ec2.yaml \
                         --parameter-overrides \
                             KeyName={{KEY_NAME}} \
                             InstanceType={{INSTANCE_TYPE}}
-                    """
+                    '''
 
                 }
 
             }
-
         }
 
         stage('Wait for EC2') {
-
             steps {
-
-                echo "Waiting for EC2..."
-
+                echo "Waiting for EC2 to initialise..."
                 sleep(time: 60, unit: 'SECONDS')
-
             }
-
         }
 
         stage('Get EC2 Public IP') {
@@ -81,7 +76,7 @@ pipeline {
 
                 }
 
-                echo "EC2 Public IP : ${SERVER_IP}"
+                echo "Server IP : ${SERVER_IP}"
 
             }
 
@@ -95,11 +90,14 @@ pipeline {
 
                     deleteDir()
 
-                    git(
-                        url: APP_REPO,
-                        branch: APP_BRANCH,
-                        credentialsId: GITHUB_CREDENTIALS
-                    )
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${APP_BRANCH}"]],
+                        userRemoteConfigs: [[
+                            url: APP_REPO,
+                            credentialsId: GITHUB_CREDENTIALS
+                        ]]
+                    ])
 
                 }
 
@@ -114,20 +112,23 @@ pipeline {
                 dir("${APP_DIR}") {
 
                     sh '''
+                    set -e
+
                     echo "Current Directory"
                     pwd
 
                     echo ""
-
-                    echo "Files"
-
+                    echo "Repository Files"
                     ls -la
 
                     echo ""
 
-                    echo "Searching Dockerfile"
+                    if [ ! -f Dockerfile ]; then
+                        echo "ERROR: Dockerfile not found."
+                        exit 1
+                    fi
 
-                    find . -name Dockerfile
+                    echo "Dockerfile found."
                     '''
 
                 }
@@ -143,7 +144,10 @@ pipeline {
                 dir("${APP_DIR}") {
 
                     sh """
+                    set -e
+
                     docker build \
+                        -f Dockerfile \
                         -t ${IMAGE} \
                         .
                     """
@@ -159,25 +163,23 @@ pipeline {
             steps {
 
                 withCredentials([
-
                     usernamePassword(
-
                         credentialsId: 'dockerhub',
-
                         usernameVariable: 'DOCKER_USER',
-
                         passwordVariable: 'DOCKER_PASS'
-
                     )
-
                 ]) {
 
                     sh """
+                    set -e
+
                     echo \$DOCKER_PASS | docker login \
                         -u \$DOCKER_USER \
                         --password-stdin
 
                     docker push ${IMAGE}
+
+                    docker logout
                     """
 
                 }
@@ -189,9 +191,7 @@ pipeline {
         stage('Wait for SSH') {
 
             steps {
-
                 sleep(time: 30, unit: 'SECONDS')
-
             }
 
         }
@@ -205,6 +205,13 @@ pipeline {
                     sh """
                     ssh -o StrictHostKeyChecking=no ubuntu@${SERVER_IP} '
 
+                    set -e
+
+                    if ! command -v docker >/dev/null 2>&1; then
+                        echo "Docker is not installed."
+                        exit 1
+                    fi
+
                     docker pull ${IMAGE}
 
                     docker stop {{PROJECT_NAME}} || true
@@ -217,8 +224,9 @@ pipeline {
                         -p 3000:3000 \
                         ${IMAGE}
 
-                    '
+                    docker ps
 
+                    '
                     """
 
                 }
@@ -235,7 +243,7 @@ pipeline {
 
             echo "========================================="
             echo "Deployment Successful"
-            echo "Application URL"
+            echo "Application URL:"
             echo "http://${SERVER_IP}:3000"
             echo "========================================="
 
@@ -243,7 +251,9 @@ pipeline {
 
         failure {
 
+            echo "========================================="
             echo "Deployment Failed"
+            echo "========================================="
 
         }
 
