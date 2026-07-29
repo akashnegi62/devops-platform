@@ -3,28 +3,43 @@ pipeline {
     agent any
 
     environment {
-
         IMAGE = "deepacode/blog-app:latest"
         STACK_NAME = "blog-app-stack"
         REGION = "ap-south-1"
         APP_REPO = "https://github.com/akashnegi62/blog-app.git"
-
     }
 
     stages {
 
         stage('Checkout') {
-
             steps {
                 checkout scm
             }
+        }
 
+        stage('Debug Workspace') {
+            steps {
+                sh '''
+                    echo "========== Workspace =========="
+                    pwd
+
+                    echo "========== Repository =========="
+                    ls -la
+
+                    echo "========== APP_REPO =========="
+                    echo $APP_REPO
+
+                    echo "========== Application Files =========="
+                    ls -la $APP_REPO || true
+
+                    echo "========== Dockerfile =========="
+                    find . -name Dockerfile
+                '''
+            }
         }
 
         stage('Create / Update EC2') {
-
             steps {
-
                 withAWS(credentials: 'aws-creds', region: "${REGION}") {
 
                     sh """
@@ -37,25 +52,17 @@ pipeline {
                     """
 
                 }
-
             }
-
         }
 
         stage('Wait for EC2') {
-
             steps {
-
                 echo "Waiting for EC2 to initialise..."
-
                 sleep(time: 60, unit: 'SECONDS')
-
             }
-
         }
 
         stage('Get EC2 Public IP') {
-
             steps {
 
                 withAWS(credentials: 'aws-creds', region: "${REGION}") {
@@ -63,36 +70,36 @@ pipeline {
                     script {
 
                         env.SERVER_IP = sh(
-
                             script: """
                             aws cloudformation describe-stacks \
                               --stack-name ${STACK_NAME} \
                               --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" \
                               --output text
                             """,
-
                             returnStdout: true
-
                         ).trim()
 
                     }
-
                 }
 
                 echo "EC2 IP: ${SERVER_IP}"
-
             }
-
         }
 
         stage('Build Docker Image') {
-
             steps {
 
-                sh "docker build -t ${IMAGE} ."
+                dir("${APP_REPO}") {
+
+                    sh """
+                    docker build \
+                        -t ${IMAGE} \
+                        .
+                    """
+
+                }
 
             }
-
         }
 
         stage('Push Docker Image') {
@@ -100,17 +107,11 @@ pipeline {
             steps {
 
                 withCredentials([
-
                     usernamePassword(
-
                         credentialsId: 'dockerhub',
-
                         usernameVariable: 'DOCKER_USER',
-
                         passwordVariable: 'DOCKER_PASS'
-
                     )
-
                 ]) {
 
                     sh """
@@ -155,10 +156,10 @@ pipeline {
                     docker rm blog_app || true
 
                     docker run -d \
-                      --name blog_app \
-                      --restart unless-stopped \
-                      -p 3000:3000 \
-                      ${IMAGE}
+                        --name blog_app \
+                        --restart unless-stopped \
+                        -p 3000:3000 \
+                        ${IMAGE}
 
                     '
                     """
