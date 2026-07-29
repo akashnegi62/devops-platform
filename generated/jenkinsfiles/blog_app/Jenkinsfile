@@ -149,12 +149,12 @@ pipeline {
 
                     docker pull ${IMAGE}
 
-                    docker stop blog-app || true
+                    docker stop blog_app || true
 
-                    docker rm blog-app || true
+                    docker rm blog_app || true
 
                     docker run -d \
-                      --name blog-app \
+                      --name blog_app \
                       --restart unless-stopped \
                       -p 3000:3000 \
                       ${IMAGE}

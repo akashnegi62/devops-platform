@@ -1,4 +1,4 @@
-pipelineJob('Blogs/blog-app') {
+pipelineJob('Blogs/blog_app') {
 
 
     description(
