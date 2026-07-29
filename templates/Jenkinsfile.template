@@ -3,66 +3,64 @@ pipeline {
     agent any
 
     environment {
+
         IMAGE = "{{DOCKER_IMAGE}}:latest"
+
         STACK_NAME = "{{STACK_NAME}}"
         REGION = "{{REGION}}"
+
         APP_REPO = "{{APP_REPO}}"
+        APP_BRANCH = "{{APP_BRANCH}}"
+
+        GITHUB_CREDENTIALS = "{{GITHUB_CREDENTIALS}}"
+
+        APP_DIR = "application"
+
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Automation Repo') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Debug Workspace') {
-            steps {
-                sh '''
-                    echo "========== Workspace =========="
-                    pwd
-
-                    echo "========== Repository =========="
-                    ls -la
-
-                    echo "========== APP_REPO =========="
-                    echo $APP_REPO
-
-                    echo "========== Application Files =========="
-                    ls -la $APP_REPO || true
-
-                    echo "========== Dockerfile =========="
-                    find . -name Dockerfile
-                '''
-            }
-        }
-
         stage('Create / Update EC2') {
+
             steps {
+
                 withAWS(credentials: 'aws-creds', region: "${REGION}") {
 
                     sh """
                     aws cloudformation deploy \
-                      --stack-name ${STACK_NAME} \
-                      --template-file cloudformation/ec2.yaml \
-                      --parameter-overrides \
-                        KeyName={{KEY_NAME}} \
-                        InstanceType={{INSTANCE_TYPE}}
+                        --stack-name ${STACK_NAME} \
+                        --template-file cloudformation/ec2.yaml \
+                        --parameter-overrides \
+                            KeyName={{KEY_NAME}} \
+                            InstanceType={{INSTANCE_TYPE}}
                     """
 
                 }
+
             }
+
         }
 
         stage('Wait for EC2') {
+
             steps {
-                echo "Waiting for EC2 to initialise..."
+
+                echo "Waiting for EC2..."
+
                 sleep(time: 60, unit: 'SECONDS')
+
             }
+
         }
 
         stage('Get EC2 Public IP') {
+
             steps {
 
                 withAWS(credentials: 'aws-creds', region: "${REGION}") {
@@ -71,25 +69,78 @@ pipeline {
 
                         env.SERVER_IP = sh(
                             script: """
-                            aws cloudformation describe-stacks \
-                              --stack-name ${STACK_NAME} \
-                              --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" \
-                              --output text
+                                aws cloudformation describe-stacks \
+                                    --stack-name ${STACK_NAME} \
+                                    --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" \
+                                    --output text
                             """,
                             returnStdout: true
                         ).trim()
 
                     }
+
                 }
 
-                echo "EC2 IP: ${SERVER_IP}"
+                echo "EC2 Public IP : ${SERVER_IP}"
+
             }
+
+        }
+
+        stage('Clone Application Repository') {
+
+            steps {
+
+                dir("${APP_DIR}") {
+
+                    deleteDir()
+
+                    git(
+                        url: APP_REPO,
+                        branch: APP_BRANCH,
+                        credentialsId: GITHUB_CREDENTIALS
+                    )
+
+                }
+
+            }
+
+        }
+
+        stage('Verify Application') {
+
+            steps {
+
+                dir("${APP_DIR}") {
+
+                    sh '''
+                    echo "Current Directory"
+                    pwd
+
+                    echo ""
+
+                    echo "Files"
+
+                    ls -la
+
+                    echo ""
+
+                    echo "Searching Dockerfile"
+
+                    find . -name Dockerfile
+                    '''
+
+                }
+
+            }
+
         }
 
         stage('Build Docker Image') {
+
             steps {
 
-                dir("${APP_REPO}") {
+                dir("${APP_DIR}") {
 
                     sh """
                     docker build \
@@ -100,6 +151,7 @@ pipeline {
                 }
 
             }
+
         }
 
         stage('Push Docker Image') {
@@ -107,11 +159,17 @@ pipeline {
             steps {
 
                 withCredentials([
+
                     usernamePassword(
+
                         credentialsId: 'dockerhub',
+
                         usernameVariable: 'DOCKER_USER',
+
                         passwordVariable: 'DOCKER_PASS'
+
                     )
+
                 ]) {
 
                     sh """
@@ -131,8 +189,6 @@ pipeline {
         stage('Wait for SSH') {
 
             steps {
-
-                echo "Waiting for SSH service..."
 
                 sleep(time: 30, unit: 'SECONDS')
 
@@ -162,6 +218,7 @@ pipeline {
                         ${IMAGE}
 
                     '
+
                     """
 
                 }
@@ -176,11 +233,11 @@ pipeline {
 
         success {
 
-            echo "===================================="
+            echo "========================================="
             echo "Deployment Successful"
-            echo "Application URL:"
+            echo "Application URL"
             echo "http://${SERVER_IP}:3000"
-            echo "===================================="
+            echo "========================================="
 
         }
 
