@@ -30,7 +30,7 @@ pipelineJob('{{FOLDER}}/{{NAME}}') {
                     remote {
 
 
-                        url('{{REPO}}')
+                        url('https://github.com/akashnegi62/devops-platform.git')
 
 
                         credentials('{{CREDENTIALS}}')
