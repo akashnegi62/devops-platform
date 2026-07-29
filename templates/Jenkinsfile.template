@@ -234,48 +234,61 @@ pipeline {
 
         stage('Deploy to EC2') {
 
-            steps {
+    steps {
 
-                withCredentials([
+        withCredentials([
 
-                    sshUserPrivateKey(
-                        credentialsId: 'ec2-key',
-                        keyFileVariable: 'SSH_KEY',
-                        usernameVariable: 'SSH_USER'
-                    ),
+            sshUserPrivateKey(
+                credentialsId: 'ec2-key',
+                keyFileVariable: 'SSH_KEY',
+                usernameVariable: 'SSH_USER'
+            )
 
-                    usernamePassword(
-                        credentialsId: 'dockerhub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
+        ]) {
 
-                ]) {
+            sh """
+            set -e
 
-                    sh """
-                    set -e
+            ssh -i "\$SSH_KEY" \
+                -o StrictHostKeyChecking=no \
+                "\$SSH_USER@${SERVER_IP}" '
 
-                    ssh -i "\$SSH_KEY" -o StrictHostKeyChecking=no "\$SSH_USER@${SERVER_IP}" '
-                        set -e
-                        echo "\$DOCKER_PASS" | sudo docker login -u "\$DOCKER_USER" --password-stdin
-                        sudo docker pull ${IMAGE}
-                        sudo docker stop {{PROJECT_NAME}} || true
-                        sudo docker rm {{PROJECT_NAME}} || true
-                        sudo docker run -d \\
-                            --name {{PROJECT_NAME}} \\
-                            --restart unless-stopped \\
-                            -p 3000:3000 \\
-                            ${IMAGE}
-                        sudo docker image prune -f
-                        sudo docker ps
-                    '
-                    """
+                set -e
 
-                }
+                echo "Pulling latest image..."
 
-            }
+                sudo docker pull ${IMAGE}
+
+                echo "Stopping old container..."
+
+                sudo docker stop {{PROJECT_NAME}} || true
+
+                sudo docker rm {{PROJECT_NAME}} || true
+
+                echo "Starting new container..."
+
+                sudo docker run -d \
+                    --name {{PROJECT_NAME}} \
+                    --restart unless-stopped \
+                    -p 3000:3000 \
+                    ${IMAGE}
+
+                echo "Cleaning unused images..."
+
+                sudo docker image prune -f
+
+                echo "Running Containers"
+
+                sudo docker ps
+
+            '
+            """
 
         }
+
+    }
+
+}
 
     }
 
