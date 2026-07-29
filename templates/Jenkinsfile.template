@@ -3,7 +3,6 @@ pipeline {
     agent any
 
     environment {
-
         IMAGE = "{{DOCKER_IMAGE}}:latest"
 
         STACK_NAME = "{{STACK_NAME}}"
@@ -15,7 +14,6 @@ pipeline {
         GITHUB_CREDENTIALS = "{{GITHUB_CREDENTIALS}}"
 
         APP_DIR = "application"
-
     }
 
     stages {
@@ -31,16 +29,16 @@ pipeline {
 
                 withAWS(credentials: 'aws-creds', region: "${REGION}") {
 
-                    sh '''
+                    sh """
                     set -e
 
                     aws cloudformation deploy \
-                        --stack-name '"${STACK_NAME}"' \
+                        --stack-name ${STACK_NAME} \
                         --template-file cloudformation/ec2.yaml \
                         --parameter-overrides \
                             KeyName={{KEY_NAME}} \
                             InstanceType={{INSTANCE_TYPE}}
-                    '''
+                    """
 
                 }
 
@@ -49,7 +47,7 @@ pipeline {
 
         stage('Wait for EC2') {
             steps {
-                echo "Waiting for EC2 to initialise..."
+                echo "Waiting for EC2..."
                 sleep(time: 60, unit: 'SECONDS')
             }
         }
@@ -76,7 +74,7 @@ pipeline {
 
                 }
 
-                echo "Server IP : ${SERVER_IP}"
+                echo "EC2 Public IP : ${SERVER_IP}"
 
             }
 
@@ -111,14 +109,14 @@ pipeline {
 
                 dir("${APP_DIR}") {
 
-                    sh '''
+                    sh """
                     set -e
 
                     echo "Current Directory"
                     pwd
 
                     echo ""
-                    echo "Repository Files"
+                    echo "Files"
                     ls -la
 
                     echo ""
@@ -129,7 +127,7 @@ pipeline {
                     fi
 
                     echo "Dockerfile found."
-                    '''
+                    """
 
                 }
 
@@ -191,6 +189,7 @@ pipeline {
         stage('Wait for SSH') {
 
             steps {
+                echo "Waiting for SSH..."
                 sleep(time: 30, unit: 'SECONDS')
             }
 
@@ -241,19 +240,19 @@ pipeline {
 
         success {
 
-            echo "========================================="
+            echo "====================================="
             echo "Deployment Successful"
             echo "Application URL:"
             echo "http://${SERVER_IP}:3000"
-            echo "========================================="
+            echo "====================================="
 
         }
 
         failure {
 
-            echo "========================================="
+            echo "====================================="
             echo "Deployment Failed"
-            echo "========================================="
+            echo "====================================="
 
         }
 
