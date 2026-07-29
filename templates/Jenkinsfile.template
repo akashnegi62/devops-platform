@@ -195,37 +195,104 @@ pipeline {
 
         }
 
+        stage('Install Docker on EC2') {
+
+            steps {
+
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'ec2-key',
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
+                    )
+                ]) {
+
+                    sh """
+                    ssh -i "${SSH_KEY}" \
+                        -o StrictHostKeyChecking=no \
+                        ${SSH_USER}@${SERVER_IP} << 'EOF'
+
+                        set -e
+
+                        if ! command -v docker >/dev/null 2>&1; then
+
+                            echo "Installing Docker..."
+
+                            sudo apt-get update
+
+                            sudo apt-get install -y docker.io
+
+                            sudo systemctl enable docker
+
+                            sudo systemctl start docker
+
+                            sudo usermod -aG docker ubuntu || true
+
+                        else
+
+                            echo "Docker already installed."
+
+                        fi
+
+                        sudo docker --version
+
+                    EOF
+                    """
+
+                }
+
+            }
+
+        }
+
         stage('Deploy to EC2') {
 
             steps {
 
-                sshagent(credentials: ['ec2-key']) {
+                withCredentials([
+
+                    sshUserPrivateKey(
+                        credentialsId: 'ec2-key',
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
+                    ),
+
+                    usernamePassword(
+                        credentialsId: 'dockerhub',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+
+                ]) {
 
                     sh """
-                    ssh -o StrictHostKeyChecking=no ubuntu@${SERVER_IP} '
+                    ssh -i "${SSH_KEY}" \
+                    -o StrictHostKeyChecking=no \
+                    ${SSH_USER}@${SERVER_IP} << EOF
 
                     set -e
 
-                    if ! command -v docker >/dev/null 2>&1; then
-                        echo "Docker is not installed."
-                        exit 1
-                    fi
+                    echo "${DOCKER_PASS}" | sudo docker login \
+                        -u "${DOCKER_USER}" \
+                        --password-stdin
 
-                    docker pull ${IMAGE}
+                    sudo docker pull ${IMAGE}
 
-                    docker stop {{PROJECT_NAME}} || true
+                    sudo docker stop {{PROJECT_NAME}} || true
 
-                    docker rm {{PROJECT_NAME}} || true
+                    sudo docker rm {{PROJECT_NAME}} || true
 
-                    docker run -d \
+                    sudo docker run -d \
                         --name {{PROJECT_NAME}} \
                         --restart unless-stopped \
                         -p 3000:3000 \
                         ${IMAGE}
 
-                    docker ps
+                    sudo docker image prune -f
 
-                    '
+                    sudo docker ps
+
+                    EOF
                     """
 
                 }
