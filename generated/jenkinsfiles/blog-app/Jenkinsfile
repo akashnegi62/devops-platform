@@ -1,0 +1,193 @@
+pipeline {
+
+    agent any
+
+    environment {
+
+        IMAGE = "deepacode/blog-app:latest"
+        STACK_NAME = "blog-app-stack"
+        REGION = "ap-south-1"
+
+    }
+
+    stages {
+
+        stage('Checkout') {
+
+            steps {
+                checkout scm
+            }
+
+        }
+
+        stage('Create / Update EC2') {
+
+            steps {
+
+                withAWS(credentials: 'aws-creds', region: "${REGION}") {
+
+                    sh """
+                    aws cloudformation deploy \
+                      --stack-name ${STACK_NAME} \
+                      --template-file cloudformation/ec2.yaml \
+                      --parameter-overrides \
+                        KeyName=jenkins-key \
+                        InstanceType=t3.micro
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Wait for EC2') {
+
+            steps {
+
+                echo "Waiting for EC2 to initialise..."
+
+                sleep(time: 60, unit: 'SECONDS')
+
+            }
+
+        }
+
+        stage('Get EC2 Public IP') {
+
+            steps {
+
+                withAWS(credentials: 'aws-creds', region: "${REGION}") {
+
+                    script {
+
+                        env.SERVER_IP = sh(
+
+                            script: """
+                            aws cloudformation describe-stacks \
+                              --stack-name ${STACK_NAME} \
+                              --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" \
+                              --output text
+                            """,
+
+                            returnStdout: true
+
+                        ).trim()
+
+                    }
+
+                }
+
+                echo "EC2 IP: ${SERVER_IP}"
+
+            }
+
+        }
+
+        stage('Build Docker Image') {
+
+            steps {
+
+                sh "docker build -t ${IMAGE} ."
+
+            }
+
+        }
+
+        stage('Push Docker Image') {
+
+            steps {
+
+                withCredentials([
+
+                    usernamePassword(
+
+                        credentialsId: 'dockerhub',
+
+                        usernameVariable: 'DOCKER_USER',
+
+                        passwordVariable: 'DOCKER_PASS'
+
+                    )
+
+                ]) {
+
+                    sh """
+                    echo \$DOCKER_PASS | docker login \
+                        -u \$DOCKER_USER \
+                        --password-stdin
+
+                    docker push ${IMAGE}
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Wait for SSH') {
+
+            steps {
+
+                echo "Waiting for SSH service..."
+
+                sleep(time: 30, unit: 'SECONDS')
+
+            }
+
+        }
+
+        stage('Deploy to EC2') {
+
+            steps {
+
+                sshagent(credentials: ['ec2-key']) {
+
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ubuntu@${SERVER_IP} '
+
+                    docker pull ${IMAGE}
+
+                    docker stop blog-app || true
+
+                    docker rm blog-app || true
+
+                    docker run -d \
+                      --name blog-app \
+                      --restart unless-stopped \
+                      -p 3000:3000 \
+                      ${IMAGE}
+
+                    '
+                    """
+
+                }
+
+            }
+
+        }
+
+    }
+
+    post {
+
+        success {
+
+            echo "===================================="
+            echo "Deployment Successful"
+            echo "Application URL:"
+            echo "http://${SERVER_IP}:3000"
+            echo "===================================="
+
+        }
+
+        failure {
+
+            echo "Deployment Failed"
+
+        }
+
+    }
+
+}

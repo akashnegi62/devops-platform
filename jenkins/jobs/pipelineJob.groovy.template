@@ -1,0 +1,51 @@
+pipelineJob('{{FOLDER}}/{{NAME}}') {
+
+
+    description(
+        'Generated automatically by DevOps Platform'
+    )
+
+
+    definition {
+
+
+        cpsScm {
+
+
+            scm {
+
+
+                git {
+
+
+                    remote {
+
+
+                        url('{{REPO}}')
+
+
+                        credentials('{{CREDENTIALS}}')
+
+
+                    }
+
+
+                    branch('{{BRANCH}}')
+
+
+                }
+
+
+            }
+
+
+            scriptPath('Jenkinsfile')
+
+
+        }
+
+
+    }
+
+
+}
