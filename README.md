@@ -186,14 +186,10 @@ git push origin feature/your-feature
 
 👨‍💻 Author
 
-<p align="center">
+<p align="left">
 <strong>Akash Negi</strong>
-<br/>
-<a href="https://github.com/akashnegi62">
-<img src="https://img.shields.io/badge/GitHub-Akash_Negi-181717?style=for-the-badge&logo=github" />
-</a>
-</p>
-
+<p/>
+  
 <p align="center">
 ⭐ <strong>If you find this project useful, please consider giving it a star!</strong>
 </p>
