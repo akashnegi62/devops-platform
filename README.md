@@ -1,4 +1,4 @@
-🚀 DevOps Platform
+<p align="center">🚀 DevOps Platform</p>
 
 <p align="center">
 <strong>A centralized platform for DevOps automation, CI/CD pipelines, and cloud infrastructure management.</strong>
